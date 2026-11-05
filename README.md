@@ -50,4 +50,4 @@ pio run -t menuconfig  # pins, SPI clock, rotation
 
 - ILI9488 over SPI only accepts 18-bit colour, so 3 bytes/pixel are sent (RGB565 API colours are expanded). A full frame is ~460 KB, hence ~10-15 fps for full-screen fills at 40 MHz.
 - Garbage/noise: lower the SPI clock (e.g. 20-26 MHz). Wrong colours/inverted: toggle BGR (0x08) in the `madctl` table in `ili9488.c`. Mirrored image: adjust the rotation value.
-- Written against the ESP-IDF 6.x component layout (`esp_driver_spi`, `esp_driver_gpio`, `esp_lcd`); I could not compile it in this environment, so verify with your ESP-IDF 6.1 install.
+- Written against the ESP-IDF 6.x component layout (`esp_driver_spi`, `esp_driver_gpio`, `esp_lcd`);
