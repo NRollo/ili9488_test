@@ -87,9 +87,10 @@ static void set_window(int x0, int y0, int x1, int y1)
 
 static inline void put_px(uint8_t *p, uint16_t c)
 {
-    p[0] = (c >> 8) & 0xF8;          // R
-    p[1] = (c >> 3) & 0xFC;          // G
-    p[2] = (c << 3) & 0xF8;          // B
+    // Expand to 8 bits by replicating the top bits so that full-scale RGB565 maps to 0xFF
+    p[0] = ((c >> 8) & 0xF8) | ((c >> 13) & 0x07);   // R
+    p[1] = ((c >> 3) & 0xFC) | ((c >> 9) & 0x03);    // G
+    p[2] = ((c << 3) & 0xF8) | ((c >> 2) & 0x07);    // B
 }
 
 esp_err_t ili9488_init(const ili9488_config_t *cfg)
@@ -172,7 +173,7 @@ esp_err_t ili9488_init(const ili9488_config_t *cfg)
     write_cmd(CMD_DISPON, NULL, 0);
     vTaskDelay(pdMS_TO_TICKS(20));
 
-    ili9488_fill_screen(COLOR_BLACK);
+    ili9488_fill_screen(0x0000);
     ili9488_set_backlight(true);
     ESP_LOGI(TAG, "Initialised %dx%d, SPI %d MHz", s_w, s_h, cfg->clock_hz / 1000000);
     return ESP_OK;
@@ -189,7 +190,7 @@ void ili9488_set_backlight(bool on)
 int ili9488_width(void) { return s_w; }
 int ili9488_height(void) { return s_h; }
 
-void ili9488_fill_rect(int x, int y, int w, int h, uint16_t color)
+static void fill_rect(int x, int y, int w, int h, uint16_t color)
 {
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
@@ -218,30 +219,7 @@ void ili9488_fill_rect(int x, int y, int w, int h, uint16_t color)
 
 void ili9488_fill_screen(uint16_t color)
 {
-    ili9488_fill_rect(0, 0, s_w, s_h, color);
-}
-
-void ili9488_draw_pixel(int x, int y, uint16_t color)
-{
-    ili9488_fill_rect(x, y, 1, 1, color);
-}
-
-void ili9488_draw_hline(int x, int y, int w, uint16_t color)
-{
-    ili9488_fill_rect(x, y, w, 1, color);
-}
-
-void ili9488_draw_vline(int x, int y, int h, uint16_t color)
-{
-    ili9488_fill_rect(x, y, 1, h, color);
-}
-
-void ili9488_draw_rect(int x, int y, int w, int h, uint16_t color)
-{
-    ili9488_draw_hline(x, y, w, color);
-    ili9488_draw_hline(x, y + h - 1, w, color);
-    ili9488_draw_vline(x, y, h, color);
-    ili9488_draw_vline(x + w - 1, y, h, color);
+    fill_rect(0, 0, s_w, s_h, color);
 }
 
 void ili9488_draw_bitmap(int x, int y, int w, int h, const uint16_t *pixels)
@@ -258,88 +236,5 @@ void ili9488_draw_bitmap(int x, int y, int w, int h, const uint16_t *pixels)
         }
         set_window(x, y + row, x + w - 1, y + row + rows - 1);
         send_pixels((size_t)rows * w * 3);
-    }
-}
-
-// ---- 5x7 font: 5 column bytes per glyph, bit0 = top row ----
-static const char s_font_chars[] = " -./0123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-static const uint8_t s_font[][5] = {
-    {0x00, 0x00, 0x00, 0x00, 0x00}, // ' '
-    {0x08, 0x08, 0x08, 0x08, 0x08}, // '-'
-    {0x00, 0x60, 0x60, 0x00, 0x00}, // '.'
-    {0x20, 0x10, 0x08, 0x04, 0x02}, // '/'
-    {0x3E, 0x51, 0x49, 0x45, 0x3E}, // 0
-    {0x00, 0x42, 0x7F, 0x40, 0x00}, // 1
-    {0x42, 0x61, 0x51, 0x49, 0x46}, // 2
-    {0x21, 0x41, 0x45, 0x4B, 0x31}, // 3
-    {0x18, 0x14, 0x12, 0x7F, 0x10}, // 4
-    {0x27, 0x45, 0x45, 0x45, 0x39}, // 5
-    {0x3C, 0x4A, 0x49, 0x49, 0x30}, // 6
-    {0x01, 0x71, 0x09, 0x05, 0x03}, // 7
-    {0x36, 0x49, 0x49, 0x49, 0x36}, // 8
-    {0x06, 0x49, 0x49, 0x29, 0x1E}, // 9
-    {0x00, 0x36, 0x36, 0x00, 0x00}, // ':'
-    {0x7E, 0x11, 0x11, 0x11, 0x7E}, // A
-    {0x7F, 0x49, 0x49, 0x49, 0x36}, // B
-    {0x3E, 0x41, 0x41, 0x41, 0x22}, // C
-    {0x7F, 0x41, 0x41, 0x22, 0x1C}, // D
-    {0x7F, 0x49, 0x49, 0x49, 0x41}, // E
-    {0x7F, 0x09, 0x09, 0x09, 0x01}, // F
-    {0x3E, 0x41, 0x49, 0x49, 0x7A}, // G
-    {0x7F, 0x08, 0x08, 0x08, 0x7F}, // H
-    {0x00, 0x41, 0x7F, 0x41, 0x00}, // I
-    {0x20, 0x40, 0x41, 0x3F, 0x01}, // J
-    {0x7F, 0x08, 0x14, 0x22, 0x41}, // K
-    {0x7F, 0x40, 0x40, 0x40, 0x40}, // L
-    {0x7F, 0x02, 0x0C, 0x02, 0x7F}, // M
-    {0x7F, 0x04, 0x08, 0x10, 0x7F}, // N
-    {0x3E, 0x41, 0x41, 0x41, 0x3E}, // O
-    {0x7F, 0x09, 0x09, 0x09, 0x06}, // P
-    {0x3E, 0x41, 0x51, 0x21, 0x5E}, // Q
-    {0x7F, 0x09, 0x19, 0x29, 0x46}, // R
-    {0x46, 0x49, 0x49, 0x49, 0x31}, // S
-    {0x01, 0x01, 0x7F, 0x01, 0x01}, // T
-    {0x3F, 0x40, 0x40, 0x40, 0x3F}, // U
-    {0x1F, 0x20, 0x40, 0x20, 0x1F}, // V
-    {0x3F, 0x40, 0x38, 0x40, 0x3F}, // W
-    {0x63, 0x14, 0x08, 0x14, 0x63}, // X
-    {0x07, 0x08, 0x70, 0x08, 0x07}, // Y
-    {0x61, 0x51, 0x49, 0x45, 0x43}, // Z
-};
-
-static const uint8_t *glyph_for(char c)
-{
-    if (c >= 'a' && c <= 'z') {
-        c -= 32;
-    }
-    const char *p = strchr(s_font_chars, c);
-    if (!p || c == '\0') {
-        p = s_font_chars; // unknown -> space
-    }
-    return s_font[p - s_font_chars];
-}
-
-void ili9488_draw_text(int x, int y, const char *text, uint16_t fg, uint16_t bg, int scale)
-{
-    if (scale < 1) scale = 1;
-    if (scale > 10) scale = 10;
-    const int cw = 6 * scale;   // 5 columns + 1 spacing
-    const int ch = 8 * scale;   // 7 rows + 1 spacing
-
-    for (; *text; text++, x += cw) {
-        if (x < 0 || y < 0 || x + cw > s_w || y + ch > s_h) {
-            continue;
-        }
-        const uint8_t *g = glyph_for(*text);
-        for (int py = 0; py < ch; py++) {
-            int gy = py / scale;
-            for (int px = 0; px < cw; px++) {
-                int gx = px / scale;
-                bool on = (gx < 5 && gy < 7) && ((g[gx] >> gy) & 1);
-                put_px(&s_buf[(py * cw + px) * 3], on ? fg : bg);
-            }
-        }
-        set_window(x, y, x + cw - 1, y + ch - 1);
-        send_pixels((size_t)cw * ch * 3);
     }
 }

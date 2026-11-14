@@ -1,8 +1,8 @@
-# ILI9488 480x320 SPI TFT test (ESP32-WROOM, ESP-IDF 6.1)
+# ILI9488 480x320 SPI TFT test with LVGL (ESP32-WROOM, ESP-IDF 6.1)
 
-Self-contained test of an ILI9488 TFT over SPI. The driver (`main/ili9488.c`) sits on top of `esp_lcd` SPI panel IO, so no external managed components are needed.
+Self-contained test of an ILI9488 TFT over SPI using [LVGL](https://lvgl.io) 9.x. The display driver (`main/ili9488.c`) sits on top of `esp_lcd` SPI panel IO and only provides init and bitmap transfer; `main/lvgl_port.c` connects it (and the XPT2046 touch) to LVGL. LVGL is pulled in through the ESP-IDF component manager (`main/idf_component.yml`) on the first build, so internet access is needed once.
 
-Tests, looping forever: solid fills, colour bars, RGB/gray gradients, grid + corner markers (orientation check), text at several scales, and a full-screen fill speed measurement (printed on screen and to the log).
+Tests, looping forever (all built from LVGL objects): solid fills, colour bars, RGB/gray gradients, grid + corner markers (orientation check), fonts/symbols/wrapped text, a widget page (button, checkbox, switch, slider, animated bar, spinner, arc), and a full-screen refresh speed measurement (printed on screen and to the log).
 
 ## Default wiring (VSPI)
 
@@ -31,7 +31,7 @@ Touch shares MOSI/SCLK with the display. Extra wiring (all configurable under *X
 
 Leave the display's own SDO/MISO pin unconnected; only T_DO goes to GPIO 19, otherwise the two outputs can conflict.
 
-At startup: 1) tap the three red crosses (top-left, top-right, bottom-left; axis swap/inversion is detected automatically, so any rotation works), 2) paint with your finger. The header shows the touch coordinates; **CLEAR** wipes the canvas and **EXIT** (or 30 s without touch) continues to the display tests. Raw calibration values are logged. If calibration fails (no touch, or the controller returns only zeros) the screen shows "TOUCH CAL FAILED" and the touch test is skipped; check the T_CLK/T_DIN/T_DO/T_CS wiring.
+At startup: 1) tap the three red crosses (top-left, top-right, bottom-left; axis swap/inversion is detected automatically, so any rotation works), 2) paint with your finger on an LVGL canvas (the pen colour changes on every new touch). The header shows the touch coordinates; **CLEAR** wipes the canvas and **EXIT** (or 30 s without touch) continues to the display tests. After calibration the touch controller is registered with LVGL as a pointer input device. Raw calibration values are logged. If calibration fails (no touch, or the controller returns only zeros) the screen shows "TOUCH CAL FAILED" and the touch test is skipped; check the T_CLK/T_DIN/T_DO/T_CS wiring.
 
 ## Build
 
@@ -48,6 +48,7 @@ pio run -t menuconfig  # pins, SPI clock, rotation
 
 ## Notes
 
-- ILI9488 over SPI only accepts 18-bit colour, so 3 bytes/pixel are sent (RGB565 API colours are expanded). A full frame is ~460 KB, hence ~10-15 fps for full-screen fills at 40 MHz.
+- ILI9488 over SPI only accepts 18-bit colour, so 3 bytes/pixel are sent (LVGL renders RGB565 into a 480x40 partial buffer, the driver expands it). A full frame is ~460 KB, hence ~10-15 fps for full-screen refreshes at 40 MHz.
+- LVGL uses the C heap (`CONFIG_LV_USE_CLIB_MALLOC`) and the Montserrat 14/20/28 fonts (see `sdkconfig.defaults`). All LVGL calls and SPI access go through `lvgl_port_lock()` once the LVGL task is running.
 - Garbage/noise: lower the SPI clock (e.g. 20-26 MHz). Wrong colours/inverted: toggle BGR (0x08) in the `madctl` table in `ili9488.c`. Mirrored image: adjust the rotation value.
 - Written against the ESP-IDF 6.x component layout (`esp_driver_spi`, `esp_driver_gpio`, `esp_lcd`);
