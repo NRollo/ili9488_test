@@ -357,7 +357,7 @@ static void chart_sample_cb(lv_timer_t *t)
 
 static void test_gauge(void)
 {
-    static const gauge_anim_t speed = {0, 200, 2500};
+    static const gauge_anim_t speed = {0, 200, 1000};
     static const int32_t speed_max = 200;
 
     LOCK();
@@ -377,7 +377,7 @@ static void test_gauge(void)
     int ch = size - 44;                     // leaves room for the x labels below the plot
     int cy = top + (h - top - ch) / 2 + 6;
 
-    lv_obj_t *title = text(s_scr, &lv_font_montserrat_14, C_GRAY, "Speed history");
+    lv_obj_t *title = text(s_scr, &lv_font_montserrat_14, C_WHITE, "Speed history");
     lv_obj_set_pos(title, cx, cy - 22);
 
     s_chart = lv_chart_create(s_scr);
